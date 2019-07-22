@@ -11,11 +11,10 @@ fn main() {
     pretty_env_logger::init();
 
     let in_addr = ([127, 0, 0, 1], 3001).into();
-    let out_addr: SocketAddr = ([127, 0, 0, 1], 3000).into();
+    let out_addr: SocketAddr = ([66, 39, 158, 129], 80).into();
 
     let client_main = Client::new();
 
-    let out_addr_clone = out_addr.clone();
     // new_service is run for each connection, creating a 'service'
     // to handle requests for that specific connection.
     let new_service = move || {
@@ -24,11 +23,12 @@ fn main() {
         // `service_fn_ok` is a helper to convert a function that
         // returns a Response into a `Service`.
         service_fn(move |mut req| {
-            let uri_string = format!("http://{}/{}",
-                out_addr_clone,
+            let uri_string = format!("http://{}{}",
+                out_addr,
                 req.uri().path_and_query().map(|x| x.as_str()).unwrap_or(""));
             let uri = uri_string.parse().unwrap();
             *req.uri_mut() = uri;
+            println!(" -> {}", req.uri());
             client.request(req)
         })
     };
