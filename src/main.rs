@@ -7,11 +7,52 @@ use hyper::service::service_fn;
 use hyper::rt::{self, Future};
 use std::net::SocketAddr;
 
+#[derive(Debug)]
+enum Failure {
+    Error,
+    Delay,
+    Timeout,
+}
+
+#[derive(Debug)]
+struct Path {
+    path: String,
+    failure: Failure,
+    frequency: f32,
+}
+
+#[derive(Debug)]
+struct Configuration {
+    paths: Vec<Path>,
+}
+
+impl Configuration {
+    fn print(&self) {
+        for p in &self.paths {
+            println!("{:?}", p);
+        }
+    }
+}
+
+fn init_config() -> Configuration {
+    // TODO: Read from file.
+    Configuration {
+        paths: vec![ 
+            Path { path: "/error".to_string(), failure: Failure::Error, frequency: 0.5 },
+            Path { path: "/delay".to_string(), failure: Failure::Delay, frequency: 0.25 },
+            Path { path: "/timeout".to_string(), failure: Failure::Timeout, frequency: 0.4 },
+        ],
+    }
+}
+
 fn main() {
     pretty_env_logger::init();
 
     let in_addr = ([127, 0, 0, 1], 3001).into();
     let out_addr: SocketAddr = ([66, 39, 158, 129], 80).into();
+
+    let config = init_config();
+    config.print();
 
     let client_main = Client::new();
 
