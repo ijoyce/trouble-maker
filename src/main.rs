@@ -2,9 +2,9 @@
 extern crate hyper;
 extern crate pretty_env_logger;
 
-use hyper::{Client, Server};
-use hyper::service::service_fn;
 use hyper::rt::{self, Future};
+use hyper::service::service_fn;
+use hyper::{Client, Server};
 use std::net::SocketAddr;
 
 #[derive(Debug)]
@@ -37,10 +37,22 @@ impl Configuration {
 fn init_config() -> Configuration {
     // TODO: Read from file.
     Configuration {
-        paths: vec![ 
-            Path { path: "/error".to_string(), failure: Failure::Error, frequency: 0.5 },
-            Path { path: "/delay".to_string(), failure: Failure::Delay, frequency: 0.25 },
-            Path { path: "/timeout".to_string(), failure: Failure::Timeout, frequency: 0.4 },
+        paths: vec![
+            Path {
+                path: "/error".to_string(),
+                failure: Failure::Error,
+                frequency: 0.5,
+            },
+            Path {
+                path: "/delay".to_string(),
+                failure: Failure::Delay,
+                frequency: 0.25,
+            },
+            Path {
+                path: "/timeout".to_string(),
+                failure: Failure::Timeout,
+                frequency: 0.4,
+            },
         ],
     }
 }
@@ -64,9 +76,11 @@ fn main() {
         // `service_fn_ok` is a helper to convert a function that
         // returns a Response into a `Service`.
         service_fn(move |mut req| {
-            let uri_string = format!("http://{}{}",
+            let uri_string = format!(
+                "http://{}{}",
                 out_addr,
-                req.uri().path_and_query().map(|x| x.as_str()).unwrap_or(""));
+                req.uri().path_and_query().map(|x| x.as_str()).unwrap_or("")
+            );
             let uri = uri_string.parse().unwrap();
             *req.uri_mut() = uri;
             println!(" -> {}", req.uri());
