@@ -30,7 +30,7 @@ struct Path {
 #[derive(Debug)]
 struct Configuration {
     paths: Vec<Path>,
-    listen_address: String,
+    listener_address: String,
 }
 
 impl Configuration {
@@ -44,7 +44,7 @@ impl Configuration {
 fn init() -> Configuration {
     // TODO: Read from file.
     Configuration {
-        listen_address: String::from("127.0.0.1:3001"),
+        listener_address: String::from("127.0.0.1:3001"),
         paths: vec![
             Path {
                 path: "/error".to_string(),
@@ -77,7 +77,16 @@ fn new_service(req: Request<Body>) -> ResponseFuture {
             match p.failure {
                 Failure::Error => {
                     println!("{:?}", Failure::Error);
-                    thread::sleep(Duration::from_millis(p.delay));
+                    let x: f32 = rand::random();
+                    if x <= p.frequency {
+                        thread::sleep(Duration::from_millis(p.delay));
+                        return Box::new(future::ok(
+                            Response::builder()
+                                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                .body(Body::from(""))
+                                .unwrap(),
+                        ));
+                    }
                 }
                 Failure::Delay => {
                     println!("{:?}", Failure::Delay);
@@ -88,7 +97,16 @@ fn new_service(req: Request<Body>) -> ResponseFuture {
                 }
                 Failure::Timeout => {
                     println!("{:?}", Failure::Timeout);
-                    thread::sleep(Duration::from_millis(p.delay));
+                    let x: f32 = rand::random();
+                    if x <= p.frequency {
+                        thread::sleep(Duration::from_millis(p.delay));
+                        return Box::new(future::ok(
+                            Response::builder()
+                                .status(StatusCode::GATEWAY_TIMEOUT)
+                                .body(Body::from(""))
+                                .unwrap(),
+                        ));
+                    }
                 }
             }
         }
@@ -109,7 +127,7 @@ fn main() {
     let config = init();
     config.print();
 
-    let addr = config.listen_address.parse().unwrap();
+    let addr = config.listener_address.parse().unwrap();
 
     hyper::rt::run(future::lazy(move || {
         let new_service = move || service_fn(move |req| new_service(req));
