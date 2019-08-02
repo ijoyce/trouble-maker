@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 extern crate hyper;
 extern crate pretty_env_logger;
 
@@ -76,37 +76,22 @@ fn new_service(req: Request<Body>) -> ResponseFuture {
         if p.path == req.uri().path() {
             match p.failure {
                 Failure::Error => {
-                    println!("{:?}", Failure::Error);
-                    let x: f32 = rand::random();
-                    if x <= p.frequency {
-                        thread::sleep(Duration::from_millis(p.delay));
-                        return Box::new(future::ok(
-                            Response::builder()
-                                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                                .body(Body::from(""))
-                                .unwrap(),
-                        ));
-                    }
+                    let result = inject_error(p);
+                    match result {
+                        Some(x) => return x,
+                        None => return proxy(p),
+                    };
                 }
                 Failure::Delay => {
-                    println!("{:?}", Failure::Delay);
-                    let x: f32 = rand::random();
-                    if x <= p.frequency {
-                        thread::sleep(Duration::from_millis(p.delay));
-                    }
+                    inject_delay(p);
+                    return proxy(p);
                 }
                 Failure::Timeout => {
-                    println!("{:?}", Failure::Timeout);
-                    let x: f32 = rand::random();
-                    if x <= p.frequency {
-                        thread::sleep(Duration::from_millis(p.delay));
-                        return Box::new(future::ok(
-                            Response::builder()
-                                .status(StatusCode::GATEWAY_TIMEOUT)
-                                .body(Body::from(""))
-                                .unwrap(),
-                        ));
-                    }
+                    let result = inject_timeout(p);
+                    match result {
+                        Some(x) => return x,
+                        None => return proxy(p),
+                    };
                 }
             }
         }
@@ -119,6 +104,54 @@ fn new_service(req: Request<Body>) -> ResponseFuture {
             .body(body)
             .unwrap(),
     ))
+}
+
+fn proxy(_p: &Path) -> ResponseFuture {
+    let body = Body::from("TODO: Proxy Request.");
+    Box::new(future::ok(
+        Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(body)
+            .unwrap(),
+    ))
+}
+
+fn inject_delay(p: &Path) {
+    println!("{:?}", Failure::Delay);
+    let x: f32 = rand::random();
+    if x <= p.frequency {
+        thread::sleep(Duration::from_millis(p.delay));
+    }
+}
+
+fn inject_error(p: &Path) -> Option<ResponseFuture> {
+    println!("{:?}", Failure::Error);
+    let x: f32 = rand::random();
+    if x <= p.frequency {
+        thread::sleep(Duration::from_millis(p.delay));
+        return Some(Box::new(future::ok(
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Body::from(""))
+                .unwrap(),
+        )));
+    };
+    None
+}
+
+fn inject_timeout(p: &Path) -> Option<ResponseFuture> {
+    println!("{:?}", Failure::Timeout);
+    let x: f32 = rand::random();
+    if x <= p.frequency {
+        thread::sleep(Duration::from_millis(p.delay));
+        return Some(Box::new(future::ok(
+            Response::builder()
+                .status(StatusCode::GATEWAY_TIMEOUT)
+                .body(Body::from(""))
+                .unwrap(),
+        )));
+    };
+    None
 }
 
 fn main() {
