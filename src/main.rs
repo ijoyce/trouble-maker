@@ -76,38 +76,23 @@ fn new_service(req: Request<Body>) -> ResponseFuture {
         if p.path == req.uri().path() {
             match p.failure {
                 Failure::Error => {
-                    let result = inject_error(p);
-                    match result {
-                        Some(x) => return x,
-                        None => return proxy(p),
-                    };
+                    if let Some(x) = inject_error(p) { return x }
                 }
                 Failure::Delay => {
                     inject_delay(p);
-                    return proxy(p);
                 }
                 Failure::Timeout => {
-                    let result = inject_timeout(p);
-                    match result {
-                        Some(x) => return x,
-                        None => return proxy(p),
-                    };
+                    if let Some(x) = inject_timeout(p) { return x }
                 }
             }
         }
     }
 
-    let body = Body::from("Not Found");
-    Box::new(future::ok(
-        Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(body)
-            .unwrap(),
-    ))
+    proxy(req)  
 }
 
-fn proxy(_p: &Path) -> ResponseFuture {
-    let body = Body::from("TODO: Proxy Request.");
+fn proxy(req: Request<Body>) -> ResponseFuture {
+    let body = Body::from(req.uri().to_string());
     Box::new(future::ok(
         Response::builder()
             .status(StatusCode::NOT_FOUND)
