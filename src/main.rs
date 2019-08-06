@@ -34,6 +34,7 @@ struct Path {
 struct Configuration {
     paths: Vec<Path>,
     listener_address: String,
+    proxy_address: String,
 }
 
 impl Configuration {
@@ -48,6 +49,7 @@ fn init() -> Configuration {
     // TODO: Read from file.
     Configuration {
         listener_address: String::from("127.0.0.1:3001"),
+        proxy_address: String::from("127.0.0.1:3002"),
         paths: vec![
             Path {
                 path: "/error".to_string(),
@@ -149,16 +151,18 @@ fn main() {
     let config = init();
     config.print();
 
-    let addr = config.listener_address.parse().unwrap();
+    let listening_addr = config.listener_address.parse().unwrap();
+    let proxying_addr: String = config.proxy_address.parse().unwrap();
 
     hyper::rt::run(future::lazy(move || {
         let new_service = move || service_fn(move |req| new_service(req));
 
-        let server = Server::bind(&addr)
+        let server = Server::bind(&listening_addr)
             .serve(new_service)
             .map_err(|e| eprintln!("server error: {}", e));
 
-        info!("Listening on http://{}", addr);
+        info!("Listening on http://{}", listening_addr);
+        info!("Proxying to http://{}", proxying_addr);
 
         server
     }));
