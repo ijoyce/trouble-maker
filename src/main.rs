@@ -2,6 +2,9 @@
 extern crate hyper;
 extern crate pretty_env_logger;
 
+#[macro_use]
+extern crate log;
+
 use futures::{future, Future};
 use hyper::service::service_fn;
 use hyper::{Body, Request, Response, Server, StatusCode};
@@ -36,7 +39,7 @@ struct Configuration {
 impl Configuration {
     fn print(&self) {
         for p in &self.paths {
-            println!("{:?}", p);
+            info!("{:?}", p);
         }
     }
 }
@@ -76,19 +79,23 @@ fn new_service(req: Request<Body>) -> ResponseFuture {
         if p.path == req.uri().path() {
             match p.failure {
                 Failure::Error => {
-                    if let Some(x) = inject_error(p) { return x }
+                    if let Some(x) = inject_error(p) {
+                        return x;
+                    }
                 }
                 Failure::Delay => {
                     inject_delay(p);
                 }
                 Failure::Timeout => {
-                    if let Some(x) = inject_timeout(p) { return x }
+                    if let Some(x) = inject_timeout(p) {
+                        return x;
+                    }
                 }
             }
         }
     }
 
-    proxy(req)  
+    proxy(req)
 }
 
 fn proxy(req: Request<Body>) -> ResponseFuture {
@@ -102,7 +109,6 @@ fn proxy(req: Request<Body>) -> ResponseFuture {
 }
 
 fn inject_delay(p: &Path) {
-    println!("{:?}", Failure::Delay);
     let x: f32 = rand::random();
     if x <= p.frequency {
         thread::sleep(Duration::from_millis(p.delay));
@@ -110,7 +116,6 @@ fn inject_delay(p: &Path) {
 }
 
 fn inject_error(p: &Path) -> Option<ResponseFuture> {
-    println!("{:?}", Failure::Error);
     let x: f32 = rand::random();
     if x <= p.frequency {
         thread::sleep(Duration::from_millis(p.delay));
@@ -125,7 +130,6 @@ fn inject_error(p: &Path) -> Option<ResponseFuture> {
 }
 
 fn inject_timeout(p: &Path) -> Option<ResponseFuture> {
-    println!("{:?}", Failure::Timeout);
     let x: f32 = rand::random();
     if x <= p.frequency {
         thread::sleep(Duration::from_millis(p.delay));
@@ -154,7 +158,7 @@ fn main() {
             .serve(new_service)
             .map_err(|e| eprintln!("server error: {}", e));
 
-        println!("Listening on http://{}", addr);
+        info!("Listening on http://{}", addr);
 
         server
     }));
