@@ -8,6 +8,7 @@ extern crate log;
 use futures::{future, Future};
 use hyper::service::service_fn;
 use hyper::{Body, Request, Response, Server, StatusCode};
+use serde::{Deserialize, Serialize};
 
 use std::thread;
 use std::time::Duration;
@@ -15,32 +16,32 @@ use std::time::Duration;
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 type ResponseFuture = Box<dyn Future<Item = Response<Body>, Error = GenericError> + Send>;
 
-#[derive(Debug)]
-enum Failure {
+#[derive(Debug, Serialize, Deserialize)]
+enum FailureType {
     Error,
     Delay,
     Timeout,
 }
 
-#[derive(Debug)]
-struct Path {
+#[derive(Debug, Serialize, Deserialize)]
+struct Failure {
     path: String,
-    failure: Failure,
+    failure_type: FailureType,
     frequency: f32,
     delay: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Configuration {
-    paths: Vec<Path>,
+    failures: Vec<Failure>,
     listener_address: String,
     proxy_address: String,
 }
 
 impl Configuration {
     fn print(&self) {
-        for p in &self.paths {
-            info!("{:?}", p);
+        for f in &self.failures {
+            info!("{:?}", f);
         }
     }
 }
@@ -50,22 +51,22 @@ fn init() -> Configuration {
     Configuration {
         listener_address: String::from("127.0.0.1:3001"),
         proxy_address: String::from("127.0.0.1:3002"),
-        paths: vec![
-            Path {
+        failures: vec![
+            Failure {
                 path: "/error".to_string(),
-                failure: Failure::Error,
+                failure_type: FailureType::Error,
                 frequency: 0.5,
                 delay: 300,
             },
-            Path {
+            Failure {
                 path: "/delay".to_string(),
-                failure: Failure::Delay,
+                failure_type: FailureType::Delay,
                 frequency: 0.25,
                 delay: 800,
             },
-            Path {
+            Failure {
                 path: "/timeout".to_string(),
-                failure: Failure::Timeout,
+                failure_type: FailureType::Timeout,
                 frequency: 0.4,
                 delay: 300,
             },
@@ -77,19 +78,19 @@ fn new_service(req: Request<Body>) -> ResponseFuture {
     let config = init();
 
     // Apply failure.
-    for p in &config.paths {
-        if p.path == req.uri().path() {
-            match p.failure {
-                Failure::Error => {
-                    if let Some(x) = inject_error(p) {
+    for f in &config.failures {
+        if f.path == req.uri().path() {
+            match f.failure_type {
+                FailureType::Error => {
+                    if let Some(x) = inject_error(f) {
                         return x;
                     }
                 }
-                Failure::Delay => {
-                    inject_delay(p);
+                FailureType::Delay => {
+                    inject_delay(f);
                 }
-                Failure::Timeout => {
-                    if let Some(x) = inject_timeout(p) {
+                FailureType::Timeout => {
+                    if let Some(x) = inject_timeout(f) {
                         return x;
                     }
                 }
@@ -110,17 +111,17 @@ fn proxy(req: Request<Body>) -> ResponseFuture {
     ))
 }
 
-fn inject_delay(p: &Path) {
+fn inject_delay(f: &Failure) {
     let x: f32 = rand::random();
-    if x <= p.frequency {
-        thread::sleep(Duration::from_millis(p.delay));
+    if x <= f.frequency {
+        thread::sleep(Duration::from_millis(f.delay));
     }
 }
 
-fn inject_error(p: &Path) -> Option<ResponseFuture> {
+fn inject_error(f: &Failure) -> Option<ResponseFuture> {
     let x: f32 = rand::random();
-    if x <= p.frequency {
-        thread::sleep(Duration::from_millis(p.delay));
+    if x <= f.frequency {
+        thread::sleep(Duration::from_millis(f.delay));
         return Some(Box::new(future::ok(
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -131,10 +132,10 @@ fn inject_error(p: &Path) -> Option<ResponseFuture> {
     None
 }
 
-fn inject_timeout(p: &Path) -> Option<ResponseFuture> {
+fn inject_timeout(f: &Failure) -> Option<ResponseFuture> {
     let x: f32 = rand::random();
-    if x <= p.frequency {
-        thread::sleep(Duration::from_millis(p.delay));
+    if x <= f.frequency {
+        thread::sleep(Duration::from_millis(f.delay));
         return Some(Box::new(future::ok(
             Response::builder()
                 .status(StatusCode::GATEWAY_TIMEOUT)
