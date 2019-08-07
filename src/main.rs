@@ -78,19 +78,19 @@ fn new_service(req: Request<Body>) -> ResponseFuture {
     let config = init();
 
     // Apply failure.
-    for f in &config.failures {
-        if f.path == req.uri().path() {
-            match f.failure_type {
+    for failure in &config.failures {
+        if failure.path == req.uri().path() {
+            match failure.failure_type {
                 FailureType::Error => {
-                    if let Some(x) = inject_error(f) {
+                    if let Some(x) = inject_error(failure) {
                         return x;
                     }
                 }
                 FailureType::Delay => {
-                    inject_delay(f);
+                    inject_delay(failure);
                 }
                 FailureType::Timeout => {
-                    if let Some(x) = inject_timeout(f) {
+                    if let Some(x) = inject_timeout(failure) {
                         return x;
                     }
                 }
