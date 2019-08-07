@@ -111,17 +111,17 @@ fn proxy(req: Request<Body>) -> ResponseFuture {
     ))
 }
 
-fn inject_delay(f: &Failure) {
+fn inject_delay(failure: &Failure) {
     let x: f32 = rand::random();
-    if x <= f.frequency {
-        thread::sleep(Duration::from_millis(f.delay));
+    if x <= failure.frequency {
+        thread::sleep(Duration::from_millis(failure.delay));
     }
 }
 
-fn inject_error(f: &Failure) -> Option<ResponseFuture> {
+fn inject_error(failure: &Failure) -> Option<ResponseFuture> {
     let x: f32 = rand::random();
-    if x <= f.frequency {
-        thread::sleep(Duration::from_millis(f.delay));
+    if x <= failure.frequency {
+        thread::sleep(Duration::from_millis(failure.delay));
         return Some(Box::new(future::ok(
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -132,10 +132,10 @@ fn inject_error(f: &Failure) -> Option<ResponseFuture> {
     None
 }
 
-fn inject_timeout(f: &Failure) -> Option<ResponseFuture> {
+fn inject_timeout(failure: &Failure) -> Option<ResponseFuture> {
     let x: f32 = rand::random();
-    if x <= f.frequency {
-        thread::sleep(Duration::from_millis(f.delay));
+    if x <= failure.frequency {
+        thread::sleep(Duration::from_millis(failure.delay));
         return Some(Box::new(future::ok(
             Response::builder()
                 .status(StatusCode::GATEWAY_TIMEOUT)
