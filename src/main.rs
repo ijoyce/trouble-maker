@@ -6,8 +6,9 @@ extern crate pretty_env_logger;
 extern crate log;
 
 use futures::{future, Future};
+use http::Uri;
 use hyper::service::service_fn;
-use hyper::{Body, Request, Response, Server, StatusCode};
+use hyper::{Client, Body, Request, Response, Server, StatusCode};
 use serde::{Deserialize, Serialize};
 
 use std::thread;
@@ -50,7 +51,7 @@ fn init() -> Configuration {
     // TODO: Read from file.
     Configuration {
         listener_address: String::from("127.0.0.1:3001"),
-        proxy_address: String::from("127.0.0.1:3002"),
+        proxy_address: String::from("httpbin.org"),
         failures: vec![
             Failure {
                 path: "/error".to_string(),
@@ -66,6 +67,12 @@ fn init() -> Configuration {
             },
             Failure {
                 path: "/timeout".to_string(),
+                failure_type: FailureType::Timeout,
+                frequency: 0.4,
+                delay: 300,
+            },
+            Failure {
+                path: "/anything".to_string(),
                 failure_type: FailureType::Timeout,
                 frequency: 0.4,
                 delay: 300,
@@ -98,17 +105,28 @@ fn new_service(req: Request<Body>) -> ResponseFuture {
         }
     }
 
-    proxy(req)
+    proxy(config, req)
 }
 
-fn proxy(req: Request<Body>) -> ResponseFuture {
-    let body = Body::from(req.uri().to_string());
-    Box::new(future::ok(
-        Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(body)
-            .unwrap(),
-    ))
+fn proxy(config: Configuration, req: Request<Body>) -> ResponseFuture {
+    let mut uri = format!("http://{}", config.proxy_address);
+
+    let (parts, body) = req.into_parts();
+    
+    match parts.uri.path_and_query() {
+        Some(x) => uri.push_str(&x.to_string()),
+        None => (),
+    }
+
+    let client = Client::new();
+    let mut proxy_req = Request::new(body);
+    *proxy_req.method_mut() = parts.method;
+    *proxy_req.headers_mut() = parts.headers;
+    *proxy_req.uri_mut() = uri.parse::<Uri>().unwrap();
+
+    Box::new(client.request(proxy_req).from_err().map(|web_res| {
+         web_res
+    }))
 }
 
 fn inject_delay(failure: &Failure) {
