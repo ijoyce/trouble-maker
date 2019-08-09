@@ -8,7 +8,7 @@ extern crate log;
 use futures::{future, Future};
 use http::Uri;
 use hyper::service::service_fn;
-use hyper::{Client, Body, Request, Response, Server, StatusCode};
+use hyper::{Body, Client, Request, Response, Server, StatusCode};
 use serde::{Deserialize, Serialize};
 
 use std::thread;
@@ -17,14 +17,14 @@ use std::time::Duration;
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 type ResponseFuture = Box<dyn Future<Item = Response<Body>, Error = GenericError> + Send>;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 enum FailureType {
     Error,
     Delay,
     Timeout,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Failure {
     path: String,
     failure_type: FailureType,
@@ -32,7 +32,7 @@ struct Failure {
     delay: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Configuration {
     failures: Vec<Failure>,
     listener_address: String,
@@ -81,9 +81,7 @@ fn init() -> Configuration {
     }
 }
 
-fn new_service(req: Request<Body>) -> ResponseFuture {
-    let config = init();
-
+fn new_service(req: Request<Body>, config: &Configuration) -> ResponseFuture {
     // Apply failure.
     for failure in &config.failures {
         if failure.path == req.uri().path() {
@@ -108,11 +106,11 @@ fn new_service(req: Request<Body>) -> ResponseFuture {
     proxy(config, req)
 }
 
-fn proxy(config: Configuration, req: Request<Body>) -> ResponseFuture {
+fn proxy(config: &Configuration, req: Request<Body>) -> ResponseFuture {
     let mut uri = format!("http://{}", config.proxy_address);
 
     let (parts, body) = req.into_parts();
-    
+
     match parts.uri.path_and_query() {
         Some(x) => uri.push_str(&x.to_string()),
         None => (),
@@ -124,9 +122,7 @@ fn proxy(config: Configuration, req: Request<Body>) -> ResponseFuture {
     *proxy_req.headers_mut() = parts.headers;
     *proxy_req.uri_mut() = uri.parse::<Uri>().unwrap();
 
-    Box::new(client.request(proxy_req).from_err().map(|web_res| {
-         web_res
-    }))
+    Box::new(client.request(proxy_req).from_err().map(|web_res| web_res))
 }
 
 fn inject_delay(failure: &Failure) {
@@ -167,14 +163,17 @@ fn inject_timeout(failure: &Failure) -> Option<ResponseFuture> {
 fn main() {
     pretty_env_logger::init();
 
-    let config = init();
-    config.print();
-
-    let listening_addr = config.listener_address.parse().unwrap();
-    let proxying_addr: String = config.proxy_address.parse().unwrap();
-
     hyper::rt::run(future::lazy(move || {
-        let new_service = move || service_fn(move |req| new_service(req));
+        let config = init();
+        config.print();
+
+        let listening_addr = config.listener_address.parse().unwrap();
+        let proxying_addr: String = config.proxy_address.parse().unwrap();
+
+        let new_service = move || {
+            let config = config.clone();
+            service_fn(move |req| new_service(req, &config))
+        };
 
         let server = Server::bind(&listening_addr)
             .serve(new_service)
