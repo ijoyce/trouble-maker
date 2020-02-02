@@ -51,7 +51,7 @@ fn init() -> Configuration {
     // TODO: Read from file.
     Configuration {
         listener_address: String::from("127.0.0.1:3001"),
-        proxy_address: String::from("httpbin.org"),
+        proxy_address: String::from("127.0.0.1:8080"),
         failures: vec![
             Failure {
                 path: "/error".to_string(),
@@ -72,7 +72,7 @@ fn init() -> Configuration {
                 delay: 300,
             },
             Failure {
-                path: "/anything".to_string(),
+                path: "/Cargo.toml".to_string(),
                 failure_type: FailureType::Timeout,
                 frequency: 0.4,
                 delay: 300,
@@ -107,6 +107,8 @@ fn new_service(req: Request<Body>, config: &Configuration) -> ResponseFuture {
 }
 
 fn proxy(config: &Configuration, req: Request<Body>) -> ResponseFuture {
+    log_request(&req);
+
     let mut uri = format!("http://{}", config.proxy_address);
 
     let (parts, body) = req.into_parts();
@@ -116,13 +118,27 @@ fn proxy(config: &Configuration, req: Request<Body>) -> ResponseFuture {
         None => (),
     }
 
-    let client = Client::new();
     let mut proxy_req = Request::new(body);
     *proxy_req.method_mut() = parts.method;
+    *proxy_req.version_mut() = parts.version;
     *proxy_req.headers_mut() = parts.headers;
     *proxy_req.uri_mut() = uri.parse::<Uri>().unwrap();
 
+    log_request(&proxy_req);
+
+    let client = Client::new();
+
     Box::new(client.request(proxy_req).from_err().map(|web_res| web_res))
+}
+
+fn log_request(request: &Request<Body>) {
+    info!("> {:?} {:?} {:?}", request.method(), request.uri(), request.version());
+
+    let h = &request.headers();
+
+    for key in h.keys() {
+        info!("> {:?}: {:?}", key, request.headers().get(key).unwrap());
+    }
 }
 
 fn inject_delay(failure: &Failure) {
