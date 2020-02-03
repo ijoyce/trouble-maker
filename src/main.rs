@@ -13,7 +13,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 type ResponseFuture = Box<dyn Future<Item = Response<Body>, Error = GenericError> + Send>;
@@ -189,6 +189,8 @@ fn main() {
     pretty_env_logger::init();
 
     hyper::rt::run(future::lazy(move || {
+        let now = Instant::now();
+
         let config = init();
         config.print();
 
@@ -206,6 +208,7 @@ fn main() {
 
         info!("Listening on http://{}", listening_addr);
         info!("Proxying to http://{}", proxying_addr);
+        info!("Started in {}ms.", now.elapsed().as_millis());
 
         server
     }));
