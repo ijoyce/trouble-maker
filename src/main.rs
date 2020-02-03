@@ -9,6 +9,7 @@ use futures::{future, Future};
 use http::Uri;
 use hyper::service::service_fn;
 use hyper::{Body, Client, Request, Response, Server, StatusCode};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use std::thread;
@@ -51,7 +52,7 @@ fn init() -> Configuration {
     // TODO: Read from file.
     Configuration {
         listener_address: String::from("127.0.0.1:3001"),
-        proxy_address: String::from("127.0.0.1:8080"),
+        proxy_address: String::from("httpbin.org"),
         failures: vec![
             Failure {
                 path: "/error".to_string(),
@@ -72,9 +73,15 @@ fn init() -> Configuration {
                 delay: 300,
             },
             Failure {
-                path: "/Cargo.toml".to_string(),
+                path: "/anything".to_string(),
                 failure_type: FailureType::Timeout,
                 frequency: 0.4,
+                delay: 300,
+            },
+            Failure {
+                path: "/users/.*/friends".to_string(),
+                failure_type: FailureType::Delay,
+                frequency: 1.0,
                 delay: 300,
             },
         ],
@@ -84,7 +91,9 @@ fn init() -> Configuration {
 fn new_service(req: Request<Body>, config: &Configuration) -> ResponseFuture {
     // Apply failure.
     for failure in &config.failures {
-        if failure.path == req.uri().path() {
+        let re = Regex::new(&failure.path).unwrap();
+
+        if re.is_match(req.uri().path()) {
             match failure.failure_type {
                 FailureType::Error => {
                     if let Some(x) = inject_error(failure) {
