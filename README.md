@@ -13,6 +13,11 @@ A layer 7 fault injection proxy server.
 To run with TRACE logging enabled:
 > RUST_LOG=trace cargo run --release
 
+### Failure Types
+* Error
+* Delay
+* Timeout
+
 ### Configuration
 ##### A basic example
 This will proxy requests from 127.0.0.1:3001 to 127.0.0.1:8080 while 50% of the time adding a delay for 300ms and returning an HTTP 500 response.
