@@ -1,6 +1,8 @@
 # trouble-maker
 A fault injection proxy server.
 
+![CI](https://github.com/ijoyce/trouble-maker/workflows/CI/badge.svg)
+
 ### Building
 > $ cargo build --release
 
