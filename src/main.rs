@@ -49,43 +49,13 @@ impl Configuration {
 }
 
 fn init() -> Configuration {
-    // TODO: Read from file.
-    Configuration {
-        listener_address: String::from("127.0.0.1:3001"),
-        proxy_address: String::from("httpbin.org"),
-        failures: vec![
-            Failure {
-                path: "/error".to_string(),
-                failure_type: FailureType::Error,
-                frequency: 0.5,
-                delay: 300,
-            },
-            Failure {
-                path: "/delay".to_string(),
-                failure_type: FailureType::Delay,
-                frequency: 0.25,
-                delay: 800,
-            },
-            Failure {
-                path: "/timeout".to_string(),
-                failure_type: FailureType::Timeout,
-                frequency: 0.4,
-                delay: 300,
-            },
-            Failure {
-                path: "/anything".to_string(),
-                failure_type: FailureType::Timeout,
-                frequency: 0.4,
-                delay: 300,
-            },
-            Failure {
-                path: "/users/.*/friends".to_string(),
-                failure_type: FailureType::Delay,
-                frequency: 1.0,
-                delay: 300,
-            },
-        ],
-    }
+    let mut config = config::Config::default();
+    config.merge(config::File::with_name("Configuration")).unwrap();
+    let config = config.try_into::<Configuration>().unwrap();
+
+    info!("Settings: {:?}", config);
+
+    config
 }
 
 fn new_service(req: Request<Body>, config: &Configuration) -> ResponseFuture {
