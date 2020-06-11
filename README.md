@@ -1,5 +1,5 @@
 # trouble-maker
-A fault injection proxy server.
+A layer 7 fault injection proxy server.
 
 ![CI](https://github.com/ijoyce/trouble-maker/workflows/CI/badge.svg)
 
