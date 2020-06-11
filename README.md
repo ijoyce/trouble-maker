@@ -14,6 +14,16 @@ To run with TRACE logging enabled:
 > RUST_LOG=trace cargo run --release
 
 ### Configuration
+##### A basic example
+This will proxy requests from 127.0.0.1:3001 to 127.0.0.1:8080 while 50% of the time adding a delay for 300ms and returning an HTTP 500 response.
+```TOML
+listener_address = "127.0.0.1:3001"
+proxy_address = "127.0.0.1:8080"
+failures = [
+    { path = "/.*", failure_type = "Error", frequency = 0.5, delay = 300 },
+]
+```
+
 An example configuration file can be found [here](https://github.com/ijoyce/trouble-maker/blob/master/Configuration.toml).
 
 ### Resources
