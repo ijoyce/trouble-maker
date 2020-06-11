@@ -13,6 +13,9 @@ A layer 7 fault injection proxy server.
 To run with TRACE logging enabled:
 > RUST_LOG=trace cargo run --release
 
+### Configuration
+An example configuration file can be found [here](https://github.com/ijoyce/trouble-maker/blob/master/Configuration.toml).
+
 ### Resources
 * LinkedOut: A Request-Level Failure Injection Framework https://engineering.linkedin.com/blog/2018/05/linkedout--a-request-level-failure-injection-framework
 * Awesome Chaos Engineering https://github.com/dastergon/awesome-chaos-engineering
