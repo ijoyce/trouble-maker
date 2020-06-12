@@ -48,7 +48,9 @@ impl Configuration {
 
 fn init() -> Configuration {
     let mut config = config::Config::default();
-    config.merge(config::File::with_name("Configuration")).unwrap();
+    config
+        .merge(config::File::with_name("Configuration"))
+        .unwrap();
     let config = config.try_into::<Configuration>().unwrap();
 
     info!("Settings: {:?}", config);
@@ -90,9 +92,8 @@ fn proxy(config: &Configuration, req: Request<Body>) -> ResponseFuture {
 
     let (parts, body) = req.into_parts();
 
-    match parts.uri.path_and_query() {
-        Some(x) => uri.push_str(&x.to_string()),
-        None => (),
+    if let Some(x) = parts.uri.path_and_query() {
+        uri.push_str(&x.to_string())
     }
 
     let mut proxy_req = Request::new(body);
@@ -109,7 +110,12 @@ fn proxy(config: &Configuration, req: Request<Body>) -> ResponseFuture {
 }
 
 fn log_request(request: &Request<Body>) {
-    info!("> {:?} {:?} {:?}", request.method(), request.uri(), request.version());
+    info!(
+        "> {:?} {:?} {:?}",
+        request.method(),
+        request.uri(),
+        request.version()
+    );
 
     let h = &request.headers();
 
