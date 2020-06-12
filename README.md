@@ -7,11 +7,7 @@ A layer 7 fault injection proxy server.
 > $ cargo build --release
 
 ### Running
-> $ cargo run --release
-
-### Logs
-To run with TRACE logging enabled:
-> RUST_LOG=trace cargo run --release
+> RUST_LOG=info cargo run --release
 
 ### Failure Types
 * Error
