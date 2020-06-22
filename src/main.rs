@@ -4,6 +4,7 @@
 extern crate log;
 
 use futures::{future, Future};
+use http::header::HeaderValue;
 use http::Uri;
 use hyper::service::service_fn;
 use hyper::{Body, Client, Request, Response, Server, StatusCode};
@@ -61,6 +62,7 @@ fn proxy(config: &Configuration, req: Request<Body>) -> ResponseFuture {
     *proxy_req.version_mut() = parts.version;
     *proxy_req.headers_mut() = parts.headers;
     *proxy_req.uri_mut() = uri.parse::<Uri>().unwrap();
+    proxy_req.headers_mut().insert("x-trouble-maker-agent", HeaderValue::from_static("0.1"));
 
     log_request(&proxy_req);
 
@@ -80,7 +82,7 @@ fn log_request(request: &Request<Body>) {
     let h = &request.headers();
 
     for key in h.keys() {
-        info!("> {:?}: {:?}", key, request.headers().get(key).unwrap());
+        info!("> > {:?}: {:?}", key, request.headers().get(key).unwrap());
     }
 }
 
