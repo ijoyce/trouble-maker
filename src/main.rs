@@ -131,13 +131,12 @@ fn inject_timeout(failure: &Failure) -> Option<Response<Body>> {
 async fn main() {
     pretty_env_logger::init();
 
+    CONFIG.print();
+
     let now = Instant::now();
 
-    let config = config::init();
-    config.print();
-
-    let listening_addr = config.listener_address.parse().unwrap();
-    let proxying_addr: String = config.proxy_address.parse().unwrap();
+    let listening_addr = &CONFIG.listener_address.parse().unwrap();
+    let proxying_addr: String = CONFIG.proxy_address.parse().unwrap();
 
     let make_service = make_service_fn(move |_| async move {
         Ok::<_, Error>(service_fn(move |req| new_service(req, &CONFIG)))

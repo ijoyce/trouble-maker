@@ -37,7 +37,5 @@ pub fn init() -> Configuration {
         .unwrap();
     let config = config.try_into::<Configuration>().unwrap();
 
-    info!("Configuration: {:?}", config);
-
     config
 }
