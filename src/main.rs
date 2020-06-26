@@ -8,8 +8,7 @@ extern crate lazy_static;
 
 use http::header::HeaderValue;
 use http::Uri;
-use hyper::service::make_service_fn;
-use hyper::service::service_fn;
+use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Error, Request, Response, Server, StatusCode};
 use regex::Regex;
 
