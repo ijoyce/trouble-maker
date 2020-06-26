@@ -37,5 +37,9 @@ pub fn init() -> Configuration {
         .unwrap();
     let config = config.try_into::<Configuration>().unwrap();
 
+    if config.failures.len() == 0 {
+        info!("No failures configured, so we'll proxy all trafic untouched.")
+    }
+
     config
 }

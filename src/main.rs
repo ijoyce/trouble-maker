@@ -147,6 +147,7 @@ async fn main() {
     info!("Listening on http://{}", listening_addr);
     info!("Proxying to http://{}", proxying_addr);
     info!("Started in {}ms.", now.elapsed().as_millis());
+    info!("Ready to cause trouble.");
 
     if let Err(e) = server.await {
         eprintln!("server error: {}", e);
