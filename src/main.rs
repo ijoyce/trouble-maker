@@ -3,11 +3,14 @@
 #[macro_use]
 extern crate log;
 
-use futures::{future, Future};
+#[macro_use]
+extern crate lazy_static;
+
 use http::header::HeaderValue;
 use http::Uri;
+use hyper::service::make_service_fn;
 use hyper::service::service_fn;
-use hyper::{Body, Client, Request, Response, Server, StatusCode};
+use hyper::{Body, Client, Error, Request, Response, Server, StatusCode};
 use regex::Regex;
 
 use std::thread;
@@ -16,10 +19,11 @@ use std::time::{Duration, Instant};
 mod config;
 use crate::config::*;
 
-type GenericError = Box<dyn std::error::Error + Send + Sync>;
-type ResponseFuture = Box<dyn Future<Item = Response<Body>, Error = GenericError> + Send>;
+lazy_static! {
+    static ref CONFIG: Configuration = config::init();
+}
 
-fn new_service(req: Request<Body>, config: &Configuration) -> ResponseFuture {
+async fn new_service(req: Request<Body>, config: &Configuration) -> Result<Response<Body>, Error> {
     // Apply failure.
     for failure in &config.failures {
         let re = Regex::new(&failure.path).unwrap();
@@ -27,8 +31,8 @@ fn new_service(req: Request<Body>, config: &Configuration) -> ResponseFuture {
         if re.is_match(req.uri().path()) {
             match failure.failure_type {
                 FailureType::Error => {
-                    if let Some(x) = inject_error(failure) {
-                        return x;
+                    if let Some(x) = inject_error(failure).await {
+                        return Ok(x);
                     }
                 }
                 FailureType::Delay => {
@@ -36,17 +40,17 @@ fn new_service(req: Request<Body>, config: &Configuration) -> ResponseFuture {
                 }
                 FailureType::Timeout => {
                     if let Some(x) = inject_timeout(failure) {
-                        return x;
+                        return Ok(x);
                     }
                 }
             }
         }
     }
 
-    proxy(config, req)
+    proxy(config, req).await
 }
 
-fn proxy(config: &Configuration, req: Request<Body>) -> ResponseFuture {
+async fn proxy(config: &Configuration, req: Request<Body>) -> Result<Response<Body>, Error> {
     log_request(&req);
 
     let mut uri = format!("http://{}", config.proxy_address);
@@ -62,13 +66,15 @@ fn proxy(config: &Configuration, req: Request<Body>) -> ResponseFuture {
     *proxy_req.version_mut() = parts.version;
     *proxy_req.headers_mut() = parts.headers;
     *proxy_req.uri_mut() = uri.parse::<Uri>().unwrap();
-    proxy_req.headers_mut().insert("x-trouble-maker-agent", HeaderValue::from_static("0.1"));
+    proxy_req
+        .headers_mut()
+        .insert("x-trouble-maker-agent", HeaderValue::from_static("0.1"));
 
     log_request(&proxy_req);
 
     let client = Client::new();
 
-    Box::new(client.request(proxy_req).from_err().map(|web_res| web_res))
+    client.request(proxy_req).await
 }
 
 fn log_request(request: &Request<Body>) {
@@ -93,59 +99,57 @@ fn inject_delay(failure: &Failure) {
     }
 }
 
-fn inject_error(failure: &Failure) -> Option<ResponseFuture> {
+async fn inject_error(failure: &Failure) -> Option<Response<Body>> {
     let x: f32 = rand::random();
     if x <= failure.frequency {
         thread::sleep(Duration::from_millis(failure.delay));
-        return Some(Box::new(future::ok(
+        return Some(
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                 .body(Body::from(""))
                 .unwrap(),
-        )));
+        );
     };
     None
 }
 
-fn inject_timeout(failure: &Failure) -> Option<ResponseFuture> {
+fn inject_timeout(failure: &Failure) -> Option<Response<Body>> {
     let x: f32 = rand::random();
     if x <= failure.frequency {
         thread::sleep(Duration::from_millis(failure.delay));
-        return Some(Box::new(future::ok(
+        return Some(
             Response::builder()
                 .status(StatusCode::GATEWAY_TIMEOUT)
                 .body(Body::from(""))
                 .unwrap(),
-        )));
+        );
     };
     None
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     pretty_env_logger::init();
 
-    hyper::rt::run(future::lazy(move || {
-        let now = Instant::now();
+    let now = Instant::now();
 
-        let config = config::init();
-        config.print();
+    let config = config::init();
+    config.print();
 
-        let listening_addr = config.listener_address.parse().unwrap();
-        let proxying_addr: String = config.proxy_address.parse().unwrap();
+    let listening_addr = config.listener_address.parse().unwrap();
+    let proxying_addr: String = config.proxy_address.parse().unwrap();
 
-        let new_service = move || {
-            let config = config.clone();
-            service_fn(move |req| new_service(req, &config))
-        };
+    let make_service = make_service_fn(move |_| async move {
+        Ok::<_, Error>(service_fn(move |req| new_service(req, &CONFIG)))
+    });
 
-        let server = Server::bind(&listening_addr)
-            .serve(new_service)
-            .map_err(|e| eprintln!("server error: {}", e));
+    let server = Server::bind(&listening_addr).serve(make_service);
 
-        info!("Listening on http://{}", listening_addr);
-        info!("Proxying to http://{}", proxying_addr);
-        info!("Started in {}ms.", now.elapsed().as_millis());
+    info!("Listening on http://{}", listening_addr);
+    info!("Proxying to http://{}", proxying_addr);
+    info!("Started in {}ms.", now.elapsed().as_millis());
 
-        server
-    }));
+    if let Err(e) = server.await {
+        eprintln!("server error: {}", e);
+    }
 }
