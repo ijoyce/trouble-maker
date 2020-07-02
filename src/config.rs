@@ -8,7 +8,7 @@ pub enum FailureType {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Failure {
+pub struct Scenario {
     pub path: String,
     pub failure_type: FailureType,
     pub frequency: f32,
@@ -17,15 +17,15 @@ pub struct Failure {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Configuration {
-    pub failures: Vec<Failure>,
+    pub scenarios: Vec<Scenario>,
     pub listener_address: String,
     pub proxy_address: String,
 }
 
 impl Configuration {
     pub fn print(&self) {
-        for f in &self.failures {
-            info!("{:?}", f);
+        for s in &self.scenarios {
+            info!("{:?}", s);
         }
     }
 }
@@ -37,8 +37,8 @@ pub fn init() -> Configuration {
         .unwrap();
     let config = config.try_into::<Configuration>().unwrap();
 
-    if config.failures.len() == 0 {
-        info!("No failures configured, so we'll proxy all traffic untouched.")
+    if config.scenarios.len() == 0 {
+        info!("No scenarios configured, so we'll proxy all traffic untouched.")
     }
 
     config

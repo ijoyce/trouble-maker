@@ -20,7 +20,7 @@ This will proxy requests from 127.0.0.1:3001 to 127.0.0.1:8080 while 50% of the 
 ```TOML
 listener_address = "127.0.0.1:3001"
 proxy_address = "127.0.0.1:8080"
-failures = [
+scenarios = [
     { path = "/.*", failure_type = "Error", frequency = 0.5, delay = 300 },
 ]
 ```

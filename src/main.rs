@@ -23,22 +23,22 @@ lazy_static! {
 }
 
 async fn new_service(req: Request<Body>, config: &Configuration) -> Result<Response<Body>, Error> {
-    // Apply failure.
-    for failure in &config.failures {
-        let re = Regex::new(&failure.path).unwrap();
+    // Find matching scenario and apply it.
+    for scenario in &config.scenarios {
+        let re = Regex::new(&scenario.path).unwrap();
 
         if re.is_match(req.uri().path()) {
-            match failure.failure_type {
+            match scenario.failure_type {
                 FailureType::Error => {
-                    if let Some(x) = inject_error(failure).await {
+                    if let Some(x) = inject_error(scenario).await {
                         return Ok(x);
                     }
                 }
                 FailureType::Delay => {
-                    inject_delay(failure);
+                    inject_delay(scenario);
                 }
                 FailureType::Timeout => {
-                    if let Some(x) = inject_timeout(failure) {
+                    if let Some(x) = inject_timeout(scenario) {
                         return Ok(x);
                     }
                 }
@@ -91,17 +91,17 @@ fn log_request(request: &Request<Body>) {
     }
 }
 
-fn inject_delay(failure: &Failure) {
+fn inject_delay(scenario: &Scenario) {
     let x: f32 = rand::random();
-    if x <= failure.frequency {
-        thread::sleep(Duration::from_millis(failure.delay));
+    if x <= scenario.frequency {
+        thread::sleep(Duration::from_millis(scenario.delay));
     }
 }
 
-async fn inject_error(failure: &Failure) -> Option<Response<Body>> {
+async fn inject_error(scenario: &Scenario) -> Option<Response<Body>> {
     let x: f32 = rand::random();
-    if x <= failure.frequency {
-        thread::sleep(Duration::from_millis(failure.delay));
+    if x <= scenario.frequency {
+        thread::sleep(Duration::from_millis(scenario.delay));
         return Some(
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -112,10 +112,10 @@ async fn inject_error(failure: &Failure) -> Option<Response<Body>> {
     None
 }
 
-fn inject_timeout(failure: &Failure) -> Option<Response<Body>> {
+fn inject_timeout(scenario: &Scenario) -> Option<Response<Body>> {
     let x: f32 = rand::random();
-    if x <= failure.frequency {
-        thread::sleep(Duration::from_millis(failure.delay));
+    if x <= scenario.frequency {
+        thread::sleep(Duration::from_millis(scenario.delay));
         return Some(
             Response::builder()
                 .status(StatusCode::GATEWAY_TIMEOUT)
