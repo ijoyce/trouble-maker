@@ -84,7 +84,7 @@ fn log_request(request: &Request<Body>) {
         request.version()
     );
 
-    let h = &request.headers();
+    let h = request.headers();
 
     for key in h.keys() {
         info!("> > {:?}: {:?}", key, request.headers().get(key).unwrap());
