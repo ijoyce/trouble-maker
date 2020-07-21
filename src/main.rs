@@ -13,16 +13,27 @@ use hyper::{Body, Client, Error, Request, Response, Server, StatusCode};
 use regex::Regex;
 
 use std::thread;
-use std::time::{Duration, Instant};
+use std::{
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 mod config;
 use crate::config::*;
 
+mod metrics;
+use crate::metrics::Metrics;
+
 lazy_static! {
     static ref CONFIG: Configuration = config::init();
+    static ref METRICS: Arc<Mutex<Metrics>> = Arc::new(Mutex::new(Metrics::new()));
 }
 
-async fn new_service(req: Request<Body>, config: &Configuration) -> Result<Response<Body>, Error> {
+async fn new_service(
+    req: Request<Body>,
+    config: &Configuration,
+    metrics: Arc<Mutex<Metrics>>,
+) -> Result<Response<Body>, Error> {
     // Find matching scenario and apply it.
     for scenario in &config.scenarios {
         let re = Regex::new(&scenario.path).unwrap();
@@ -45,6 +56,8 @@ async fn new_service(req: Request<Body>, config: &Configuration) -> Result<Respo
             }
         }
     }
+
+    metrics.lock().unwrap().requests.increment();
 
     proxy(config, req).await
 }
@@ -138,17 +151,29 @@ async fn main() {
     let proxying_addr: String = CONFIG.proxy_address.parse().unwrap();
 
     let make_service = make_service_fn(move |_| async move {
-        Ok::<_, Error>(service_fn(move |req| new_service(req, &CONFIG)))
+        Ok::<_, Error>(service_fn(move |req| {
+            new_service(req, &CONFIG, Arc::clone(&METRICS))
+        }))
     });
 
     let server = Server::bind(&listening_addr).serve(make_service);
+    let graceful = server.with_graceful_shutdown(shutdown_signal());
 
     info!("Listening on http://{}", listening_addr);
     info!("Proxying to http://{}", proxying_addr);
     info!("Started in {}ms.", now.elapsed().as_millis());
     info!("Ready to cause trouble.");
 
-    if let Err(e) = server.await {
+    if let Err(e) = graceful.await {
         eprintln!("server error: {}", e);
     }
+}
+
+async fn shutdown_signal() {
+    // Wait for the CTRL+C signal
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to install CTRL+C signal handler");
+
+    println!("\nMetrics\n{}", METRICS.lock().unwrap());
 }
