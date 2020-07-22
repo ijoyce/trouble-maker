@@ -34,37 +34,42 @@ async fn new_service(
     config: &Configuration,
     metrics: Arc<Mutex<Metrics>>,
 ) -> Result<Response<Body>, Error> {
+    metrics.lock().unwrap().requests.increment();
+
     // Find matching scenario and apply it.
     for scenario in &config.scenarios {
         let re = Regex::new(&scenario.path).unwrap();
 
         if re.is_match(req.uri().path()) {
             match scenario.failure_type {
-                FailureType::Error => {
-                    if let Some(x) = inject_error(scenario, &metrics).await {
+                FailureType::Error => match inject_error(scenario, &metrics).await {
+                    Some(x) => {
                         return Ok(x);
                     }
-                }
+                    None => {
+                        break;
+                    }
+                },
                 FailureType::Delay => {
                     inject_delay(scenario, &metrics);
+                    break;
                 }
-                FailureType::Timeout => {
-                    if let Some(x) = inject_timeout(scenario, &metrics) {
+                FailureType::Timeout => match inject_timeout(scenario, &metrics) {
+                    Some(x) => {
                         return Ok(x);
                     }
-                }
+                    None => {
+                        break;
+                    }
+                },
             }
         }
     }
-
-    metrics.lock().unwrap().requests.increment();
 
     proxy(config, req).await
 }
 
 async fn proxy(config: &Configuration, req: Request<Body>) -> Result<Response<Body>, Error> {
-    log_request(&req);
-
     let mut uri = format!("http://{}", config.proxy_address);
 
     let (parts, body) = req.into_parts();
@@ -82,26 +87,16 @@ async fn proxy(config: &Configuration, req: Request<Body>) -> Result<Response<Bo
         .headers_mut()
         .insert("x-trouble-maker-agent", HeaderValue::from_static("0.1"));
 
-    log_request(&proxy_req);
+    info!(
+        "Proxying {}{} -> {}.",
+        config.listener_address,
+        parts.uri,
+        proxy_req.uri()
+    );
 
     let client = Client::new();
 
     client.request(proxy_req).await
-}
-
-fn log_request(request: &Request<Body>) {
-    info!(
-        "> {:?} {:?} {:?}",
-        request.method(),
-        request.uri(),
-        request.version()
-    );
-
-    let h = request.headers();
-
-    for key in h.keys() {
-        info!("> > {:?}: {:?}", key, request.headers().get(key).unwrap());
-    }
 }
 
 fn inject_delay(scenario: &Scenario, metrics: &Arc<Mutex<Metrics>>) {
@@ -186,5 +181,8 @@ async fn shutdown_signal() {
         .await
         .expect("failed to install CTRL+C signal handler");
 
-    println!("\nMetrics\n-----------------------\n{}", METRICS.lock().unwrap());
+    println!(
+        "\nMetrics\n-----------------------\n{}",
+        METRICS.lock().unwrap()
+    );
 }
