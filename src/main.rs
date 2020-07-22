@@ -41,15 +41,15 @@ async fn new_service(
         if re.is_match(req.uri().path()) {
             match scenario.failure_type {
                 FailureType::Error => {
-                    if let Some(x) = inject_error(scenario).await {
+                    if let Some(x) = inject_error(scenario, &metrics).await {
                         return Ok(x);
                     }
                 }
                 FailureType::Delay => {
-                    inject_delay(scenario);
+                    inject_delay(scenario, &metrics);
                 }
                 FailureType::Timeout => {
-                    if let Some(x) = inject_timeout(scenario) {
+                    if let Some(x) = inject_timeout(scenario, &metrics) {
                         return Ok(x);
                     }
                 }
@@ -104,17 +104,25 @@ fn log_request(request: &Request<Body>) {
     }
 }
 
-fn inject_delay(scenario: &Scenario) {
+fn inject_delay(scenario: &Scenario, metrics: &Arc<Mutex<Metrics>>) {
     let x: f32 = rand::random();
+
     if x <= scenario.frequency {
+        metrics.lock().unwrap().delays.increment();
         thread::sleep(Duration::from_millis(scenario.delay));
     }
 }
 
-async fn inject_error(scenario: &Scenario) -> Option<Response<Body>> {
+async fn inject_error(
+    scenario: &Scenario,
+    metrics: &Arc<Mutex<Metrics>>,
+) -> Option<Response<Body>> {
     let x: f32 = rand::random();
+
     if x <= scenario.frequency {
         thread::sleep(Duration::from_millis(scenario.delay));
+        metrics.lock().unwrap().errors.increment();
+
         return Some(
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -125,10 +133,13 @@ async fn inject_error(scenario: &Scenario) -> Option<Response<Body>> {
     None
 }
 
-fn inject_timeout(scenario: &Scenario) -> Option<Response<Body>> {
+fn inject_timeout(scenario: &Scenario, metrics: &Arc<Mutex<Metrics>>) -> Option<Response<Body>> {
     let x: f32 = rand::random();
+
     if x <= scenario.frequency {
         thread::sleep(Duration::from_millis(scenario.delay));
+        metrics.lock().unwrap().timeouts.increment();
+
         return Some(
             Response::builder()
                 .status(StatusCode::GATEWAY_TIMEOUT)
@@ -175,5 +186,5 @@ async fn shutdown_signal() {
         .await
         .expect("failed to install CTRL+C signal handler");
 
-    println!("\nMetrics\n{}", METRICS.lock().unwrap());
+    println!("\nMetrics\n-----------------------\n{}", METRICS.lock().unwrap());
 }

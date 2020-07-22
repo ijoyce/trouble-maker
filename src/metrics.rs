@@ -19,19 +19,26 @@ impl Counter {
 #[derive(Debug)]
 pub struct Metrics {
     pub requests: Counter,
+    pub delays: Counter,
+    pub errors: Counter,
+    pub timeouts: Counter,
 }
 
 impl Metrics {
     pub fn new() -> Metrics {
-        return Metrics {
+        Metrics {
             requests: Counter::new(String::from("Requests")),
-        };
+            delays: Counter::new(String::from("Delays")),
+            errors: Counter::new(String::from("Errors")),
+            timeouts: Counter::new(String::from("Timeouts")),
+        }
     }
 }
 
 impl fmt::Display for Metrics {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Request Count: {}", self.requests.value)
+        write!(f, "Request Count: {}.\nDelayed Requests: {}.\nErrored Requests: {}.\nTimedout Requets: {}.\n",
+            self.requests.value, self.delays.value, self.errors.value, self.timeouts.value)
     }
 }
 
@@ -52,5 +59,14 @@ mod tests {
         c.increment();
         c.increment();
         assert_eq!(c.value, 3);
+    }
+
+    #[test]
+    fn new_metric_counters_are_init_to_0() {
+        let m = Metrics::new();
+        assert_eq!(m.requests.value, 0);
+        assert_eq!(m.delays.value, 0);
+        assert_eq!(m.errors.value, 0);
+        assert_eq!(m.timeouts.value, 0);
     }
 }
