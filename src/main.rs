@@ -108,10 +108,7 @@ fn inject_delay(scenario: &Scenario, metrics: &Mutex<Metrics>) {
     }
 }
 
-async fn inject_error(
-    scenario: &Scenario,
-    metrics: &Mutex<Metrics>,
-) -> Option<Response<Body>> {
+async fn inject_error(scenario: &Scenario, metrics: &Mutex<Metrics>) -> Option<Response<Body>> {
     let x: f32 = rand::random();
 
     if x <= scenario.frequency {
@@ -157,9 +154,7 @@ async fn main() {
     let proxying_addr: String = CONFIG.proxy_address.parse().unwrap();
 
     let make_service = make_service_fn(move |_| async move {
-        Ok::<_, Error>(service_fn(move |req| {
-            new_service(req, &CONFIG, &METRICS)
-        }))
+        Ok::<_, Error>(service_fn(move |req| new_service(req, &CONFIG, &METRICS)))
     });
 
     let server = Server::bind(&listening_addr).serve(make_service);
