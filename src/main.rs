@@ -14,7 +14,7 @@ use regex::Regex;
 
 use std::thread;
 use std::{
-    sync::{Arc, Mutex},
+    sync::Mutex,
     time::{Duration, Instant},
 };
 
@@ -24,49 +24,55 @@ use crate::config::*;
 mod metrics;
 use crate::metrics::Metrics;
 
+type Delay = u64;
+type Fault = (Option<Response<Body>>, Option<Delay>);
+
 lazy_static! {
     static ref CONFIG: Configuration = config::init();
     static ref METRICS: Mutex<Metrics> = Mutex::new(Metrics::new());
 }
 
 async fn new_service(
-    req: Request<Body>,
+    request: Request<Body>,
     config: &Configuration,
     metrics: &Mutex<Metrics>,
 ) -> Result<Response<Body>, Error> {
     metrics.lock().unwrap().requests.increment();
 
+    let path = request.uri().path();
+
     // Find matching scenario and apply it.
     for scenario in &config.scenarios {
         let re = Regex::new(&scenario.path).unwrap();
 
-        if re.is_match(req.uri().path()) {
-            match scenario.failure_type {
-                FailureType::Error => match inject_error(scenario, &metrics).await {
-                    Some(x) => {
-                        return Ok(x);
-                    }
-                    None => {
-                        break;
-                    }
-                },
-                FailureType::Delay => {
-                    inject_delay(scenario, &metrics);
+        if re.is_match(path) {
+            let fault = match scenario.failure_type {
+                FailureType::Error => determine_error(scenario, metrics),
+                FailureType::Delay => determine_delay(scenario, metrics),
+                FailureType::Timeout => determine_timeout(scenario, metrics),
+            };
+
+            match fault {
+                (None, Some(delay)) => {
+                    thread::sleep(Duration::from_millis(delay));
                     break;
                 }
-                FailureType::Timeout => match inject_timeout(scenario, &metrics) {
-                    Some(x) => {
-                        return Ok(x);
-                    }
-                    None => {
-                        break;
-                    }
-                },
-            }
+                (Some(response), None) => {
+                    return Ok::<Response<Body>, Error>(response);
+                }
+                (Some(response), Some(delay)) => {
+                    thread::sleep(Duration::from_millis(delay));
+                    return Ok::<Response<Body>, Error>(response);
+                }
+                (None, None) => {
+                    break;
+                }
+            };
         }
     }
 
-    proxy(config, req).await
+    // No matching scenario, proxy.
+    proxy(config, request).await
 }
 
 async fn proxy(config: &Configuration, req: Request<Body>) -> Result<Response<Body>, Error> {
@@ -99,47 +105,53 @@ async fn proxy(config: &Configuration, req: Request<Body>) -> Result<Response<Bo
     client.request(proxy_req).await
 }
 
-fn inject_delay(scenario: &Scenario, metrics: &Mutex<Metrics>) {
+fn determine_delay(scenario: &Scenario, metrics: &Mutex<Metrics>) -> Fault {
     let x: f32 = rand::random();
 
     if x <= scenario.frequency {
         metrics.lock().unwrap().delays.increment();
-        thread::sleep(Duration::from_millis(scenario.delay));
+        return (None, Some(scenario.delay));
     }
+
+    (None, None)
 }
 
-async fn inject_error(scenario: &Scenario, metrics: &Mutex<Metrics>) -> Option<Response<Body>> {
+fn determine_error(scenario: &Scenario, metrics: &Mutex<Metrics>) -> Fault {
     let x: f32 = rand::random();
 
     if x <= scenario.frequency {
-        thread::sleep(Duration::from_millis(scenario.delay));
         metrics.lock().unwrap().errors.increment();
 
-        return Some(
+        let response = Some(
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                 .body(Body::from(""))
                 .unwrap(),
         );
+
+        return (response, Some(scenario.delay));
     };
-    None
+
+    (None, None)
 }
 
-fn inject_timeout(scenario: &Scenario, metrics: &Mutex<Metrics>) -> Option<Response<Body>> {
+fn determine_timeout(scenario: &Scenario, metrics: &Mutex<Metrics>) -> Fault {
     let x: f32 = rand::random();
 
     if x <= scenario.frequency {
-        thread::sleep(Duration::from_millis(scenario.delay));
         metrics.lock().unwrap().timeouts.increment();
 
-        return Some(
+        let response = Some(
             Response::builder()
                 .status(StatusCode::GATEWAY_TIMEOUT)
                 .body(Body::from(""))
                 .unwrap(),
         );
+
+        return (response, Some(scenario.delay));
     };
-    None
+
+    (None, None)
 }
 
 #[tokio::main]
@@ -180,4 +192,105 @@ async fn shutdown_signal() {
         "\nMetrics\n-----------------------\n{}",
         METRICS.lock().unwrap()
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn determine_timeout_with_100_percent_frequency_returns_timeout() {
+        let metrics = Metrics::new();
+        let scenario = Scenario {
+            path: String::from("/test"),
+            failure_type: FailureType::Timeout,
+            frequency: 1.0,
+            delay: 500,
+        };
+
+        let fault = determine_timeout(&scenario, &Mutex::new(metrics));
+
+        assert_eq!(fault.0.unwrap().status(), StatusCode::GATEWAY_TIMEOUT);
+        assert_eq!(fault.1.unwrap(), 500);
+    }
+
+    #[test]
+    fn determine_timeout_with_0_percent_frequency_returns_no_timeout() {
+        let metrics = Metrics::new();
+        let scenario = Scenario {
+            path: String::from("/test"),
+            failure_type: FailureType::Timeout,
+            frequency: 0.0,
+            delay: 500,
+        };
+
+        let fault = determine_timeout(&scenario, &Mutex::new(metrics));
+
+        assert_eq!(fault.0.is_none(), true);
+        assert_eq!(fault.1.is_none(), true);
+    }
+
+    #[test]
+    fn determine_error_with_100_percent_frequency_returns_error() {
+        let metrics = Metrics::new();
+        let scenario = Scenario {
+            path: String::from("/test"),
+            failure_type: FailureType::Error,
+            frequency: 1.0,
+            delay: 500,
+        };
+
+        let fault = determine_error(&scenario, &Mutex::new(metrics));
+
+        assert_eq!(fault.0.unwrap().status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(fault.1.unwrap(), 500);
+    }
+
+    #[test]
+    fn determine_error_with_0_percent_frequency_returns_no_error() {
+        let metrics = Metrics::new();
+        let scenario = Scenario {
+            path: String::from("/test"),
+            failure_type: FailureType::Error,
+            frequency: 0.0,
+            delay: 500,
+        };
+
+        let fault = determine_error(&scenario, &Mutex::new(metrics));
+
+        assert_eq!(fault.0.is_none(), true);
+        assert_eq!(fault.1.is_none(), true);
+    }
+
+    #[test]
+    fn determine_delay_with_100_percent_frequency_returns_delay() {
+        let metrics = Metrics::new();
+        let scenario = Scenario {
+            path: String::from("/test"),
+            failure_type: FailureType::Delay,
+            frequency: 1.0,
+            delay: 500,
+        };
+
+        let fault = determine_delay(&scenario, &Mutex::new(metrics));
+
+        assert_eq!(fault.0.is_none(), true);
+        assert_eq!(fault.1.unwrap(), 500);
+    }
+
+    #[test]
+    fn determine_delay_with_0_percent_frequency_returns_no_delay() {
+        let metrics = Metrics::new();
+        let scenario = Scenario {
+            path: String::from("/test"),
+            failure_type: FailureType::Delay,
+            frequency: 0.0,
+            delay: 500,
+        };
+
+        let fault = determine_error(&scenario, &Mutex::new(metrics));
+
+        assert_eq!(fault.0.is_none(), true);
+        assert_eq!(fault.1.is_none(), true);
+    }
 }
