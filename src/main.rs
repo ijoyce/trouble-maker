@@ -26,13 +26,13 @@ use crate::metrics::Metrics;
 
 lazy_static! {
     static ref CONFIG: Configuration = config::init();
-    static ref METRICS: Arc<Mutex<Metrics>> = Arc::new(Mutex::new(Metrics::new()));
+    static ref METRICS: Mutex<Metrics> = Mutex::new(Metrics::new());
 }
 
 async fn new_service(
     req: Request<Body>,
     config: &Configuration,
-    metrics: Arc<Mutex<Metrics>>,
+    metrics: &Mutex<Metrics>,
 ) -> Result<Response<Body>, Error> {
     metrics.lock().unwrap().requests.increment();
 
@@ -99,7 +99,7 @@ async fn proxy(config: &Configuration, req: Request<Body>) -> Result<Response<Bo
     client.request(proxy_req).await
 }
 
-fn inject_delay(scenario: &Scenario, metrics: &Arc<Mutex<Metrics>>) {
+fn inject_delay(scenario: &Scenario, metrics: &Mutex<Metrics>) {
     let x: f32 = rand::random();
 
     if x <= scenario.frequency {
@@ -110,7 +110,7 @@ fn inject_delay(scenario: &Scenario, metrics: &Arc<Mutex<Metrics>>) {
 
 async fn inject_error(
     scenario: &Scenario,
-    metrics: &Arc<Mutex<Metrics>>,
+    metrics: &Mutex<Metrics>,
 ) -> Option<Response<Body>> {
     let x: f32 = rand::random();
 
@@ -128,7 +128,7 @@ async fn inject_error(
     None
 }
 
-fn inject_timeout(scenario: &Scenario, metrics: &Arc<Mutex<Metrics>>) -> Option<Response<Body>> {
+fn inject_timeout(scenario: &Scenario, metrics: &Mutex<Metrics>) -> Option<Response<Body>> {
     let x: f32 = rand::random();
 
     if x <= scenario.frequency {
@@ -158,7 +158,7 @@ async fn main() {
 
     let make_service = make_service_fn(move |_| async move {
         Ok::<_, Error>(service_fn(move |req| {
-            new_service(req, &CONFIG, Arc::clone(&METRICS))
+            new_service(req, &CONFIG, &METRICS)
         }))
     });
 
