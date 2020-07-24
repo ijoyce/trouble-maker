@@ -54,13 +54,16 @@ async fn new_service(
 
             match fault {
                 (None, Some(delay)) => {
+                    info!("Causing a {}ms delay for {}.", delay, path);
                     thread::sleep(Duration::from_millis(delay));
                     break;
                 }
                 (Some(response), None) => {
+                    info!("Return an HTTP {} for {}.", response.status(), path);
                     return Ok::<Response<Body>, Error>(response);
                 }
                 (Some(response), Some(delay)) => {
+                    info!("Causing a {}ms delay and an HTTP {} for {}.", delay, response.status(), path);
                     thread::sleep(Duration::from_millis(delay));
                     return Ok::<Response<Body>, Error>(response);
                 }
