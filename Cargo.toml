@@ -13,5 +13,5 @@ rand = "0.7"
 tokio = { version = "0.2", features = ["full"] }
 http = "0.2"
 regex = "1"
-config = "0.9"
+config = "0.10"
 lazy_static = "1.4.0"
