@@ -34,8 +34,10 @@ pub fn init() -> Configuration {
     let mut config = config::Config::default();
     config
         .merge(config::File::with_name("Configuration"))
-        .unwrap();
-    let config = config.try_into::<Configuration>().unwrap();
+        .expect("Can't open Configuration.toml.");
+
+    let config = config.try_into::<Configuration>()
+        .expect("Can't deserialize Configuration.toml into a config struct.");
 
     if config.scenarios.len() == 0 {
         info!("No scenarios configured, so we'll proxy all traffic untouched.")
