@@ -36,7 +36,8 @@ pub fn init() -> Configuration {
         .merge(config::File::with_name("Configuration"))
         .expect("Can't open Configuration.toml.");
 
-    let config = config.try_into::<Configuration>()
+    let config = config
+        .try_into::<Configuration>()
         .expect("Can't deserialize Configuration.toml into a config struct.");
 
     if config.scenarios.len() == 0 {

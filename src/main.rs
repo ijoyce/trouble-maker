@@ -63,7 +63,12 @@ async fn new_service(
                     return Ok::<Response<Body>, Error>(response);
                 }
                 (Some(response), Some(delay)) => {
-                    info!("Causing a {}ms delay and an HTTP {} for {}.", delay, response.status(), path);
+                    info!(
+                        "Causing a {}ms delay and an HTTP {} for {}.",
+                        delay,
+                        response.status(),
+                        path
+                    );
                     thread::sleep(Duration::from_millis(delay));
                     return Ok::<Response<Body>, Error>(response);
                 }
