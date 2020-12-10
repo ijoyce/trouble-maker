@@ -20,6 +20,7 @@ pub struct Configuration {
     pub scenarios: Vec<Scenario>,
     pub listener_address: String,
     pub proxy_address: String,
+    pub metrics_path: String,
 }
 
 impl Configuration {

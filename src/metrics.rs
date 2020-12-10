@@ -1,6 +1,7 @@
+use serde::Serialize;
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Counter {
     name: String,
     value: u32,
@@ -16,7 +17,7 @@ impl Counter {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Metrics {
     pub requests: Counter,
     pub delays: Counter,
@@ -32,6 +33,10 @@ impl Metrics {
             errors: Counter::new(String::from("Errors")),
             timeouts: Counter::new(String::from("Timeouts")),
         }
+    }
+
+    pub fn to_json(&mut self) -> String {
+        serde_json::to_string(self).unwrap_or(String::from("Error generating metrics."))
     }
 }
 

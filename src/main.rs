@@ -41,6 +41,11 @@ async fn new_service(
 
     let path = request.uri().path();
 
+    // Serve up metrics.
+    if path == config.metrics_path {
+        return load_metrics(metrics);
+    }
+
     // Find matching scenario and apply it.
     for scenario in &config.scenarios {
         let re = Regex::new(&scenario.path).unwrap();
@@ -160,6 +165,16 @@ fn determine_timeout(scenario: &Scenario, metrics: &Mutex<Metrics>) -> Fault {
     };
 
     (None, None)
+}
+
+fn load_metrics(metrics: &Mutex<Metrics>) -> Result<Response<Body>, Error> {
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .body(Body::from(metrics.lock().unwrap().to_json()))
+        .unwrap();
+
+    Ok::<Response<Body>, Error>(response)
 }
 
 #[tokio::main]
