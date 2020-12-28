@@ -37,14 +37,14 @@ async fn new_service(
     config: &Configuration,
     metrics: &Mutex<Metrics>,
 ) -> Result<Response<Body>, Error> {
-    metrics.lock().unwrap().requests.increment();
-
     let path = request.uri().path();
 
     // Serve up metrics.
     if path == config.metrics_path {
         return load_metrics(metrics);
     }
+
+    metrics.lock().unwrap().requests.increment();
 
     // Find matching scenario and apply it.
     for scenario in &config.scenarios {
