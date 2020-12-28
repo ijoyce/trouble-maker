@@ -4,7 +4,7 @@ use std::fmt;
 #[derive(Debug, Serialize)]
 pub struct Counter {
     name: String,
-    value: u32,
+    pub value: u32,
 }
 
 impl Counter {
@@ -15,6 +15,11 @@ impl Counter {
         self.value += 1;
         self.value
     }
+
+    pub fn decrement(&mut self) -> u32 {
+        self.value -= 1;
+        self.value
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -23,6 +28,8 @@ pub struct Metrics {
     pub delays: Counter,
     pub errors: Counter,
     pub timeouts: Counter,
+    pub concurrent_requests: Counter,
+    pub shed_requests: Counter,
 }
 
 impl Metrics {
@@ -32,6 +39,8 @@ impl Metrics {
             delays: Counter::new(String::from("Delays")),
             errors: Counter::new(String::from("Errors")),
             timeouts: Counter::new(String::from("Timeouts")),
+            concurrent_requests: Counter::new(String::from("ConcurrentRequests")),
+            shed_requests: Counter::new(String::from("ShedRequests")),
         }
     }
 
@@ -73,5 +82,18 @@ mod tests {
         assert_eq!(m.delays.value, 0);
         assert_eq!(m.errors.value, 0);
         assert_eq!(m.timeouts.value, 0);
+        assert_eq!(m.concurrent_requests.value, 0);
+        assert_eq!(m.shed_requests.value, 0);
+    }
+
+    #[test]
+    fn incrementing_a_count_3_times_and_decrementing_2_times_has_a_value_of_1() {
+        let mut c = Counter::new(String::from("test"));
+        c.increment();
+        c.increment();
+        c.increment();
+        c.decrement();
+        c.decrement();
+        assert_eq!(c.value, 1);
     }
 }

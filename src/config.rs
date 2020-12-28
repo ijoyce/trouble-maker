@@ -21,6 +21,7 @@ pub struct Configuration {
     pub listener_address: String,
     pub proxy_address: String,
     pub metrics_path: String,
+    pub max_concurrent_requests: u32,
 }
 
 impl Configuration {
