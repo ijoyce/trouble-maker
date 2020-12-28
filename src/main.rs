@@ -197,6 +197,7 @@ async fn main() {
 
     info!("Listening on http://{}", listening_addr);
     info!("Proxying to http://{}", proxying_addr);
+    info!("Metrics available at http://{}{}", listening_addr, CONFIG.metrics_path);
     info!("Started in {}ms.", now.elapsed().as_millis());
     info!("Ready to cause trouble.");
 
