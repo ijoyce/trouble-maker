@@ -1,11 +1,12 @@
 listener_address = "127.0.0.1:3001"
 proxy_address = "127.0.0.1:80"
 metrics_path = "/metrics"
+max_concurrent_requests = 5000
 scenarios = [
     { path = "/error", failure_type = "Error", frequency = 0.5, delay = 300 },
     { path = "/delay", failure_type = "Delay", frequency = 0.25, delay = 800 },
     { path = "/timeout", failure_type = "Timeout", frequency = 0.4, delay = 300 },
     { path = "/anything", failure_type = "Timeout", frequency = 0.4, delay = 300 },
     { path = "/users/.*/friends", failure_type = "Delay", frequency = 1.0, delay = 300 },
-    { path = "/", failure_type = "Delay", frequency = 1.0, delay = 300 },
+    { path = "/", failure_type = "Delay", frequency = 0.5, delay = 100 },
 ]

@@ -37,13 +37,23 @@ async fn new_service(
     config: &Configuration,
     metrics: &Mutex<Metrics>,
 ) -> Result<Response<Body>, Error> {
-    metrics.lock().unwrap().requests.increment();
-
     let path = request.uri().path();
 
     // Serve up metrics.
     if path == config.metrics_path {
         return load_metrics(metrics);
+    }
+
+    // Inc metrics.
+    metrics.lock().unwrap().requests.increment();
+    metrics.lock().unwrap().concurrent_requests.increment();
+
+    // 503 if we're over the max_concurrent_requests.
+    if metrics.lock().unwrap().concurrent_requests.value >= config.max_concurrent_requests {
+        info!("Shedding {}{}.", config.listener_address, path);
+        metrics.lock().unwrap().concurrent_requests.decrement();
+        metrics.lock().unwrap().shed_requests.increment();
+        return load_overloaded(config);
     }
 
     // Find matching scenario and apply it.
@@ -85,10 +95,14 @@ async fn new_service(
     }
 
     // No matching scenario, proxy.
-    proxy(config, request).await
+    proxy(config, metrics, request).await
 }
 
-async fn proxy(config: &Configuration, req: Request<Body>) -> Result<Response<Body>, Error> {
+async fn proxy(
+    config: &Configuration,
+    metrics: &Mutex<Metrics>,
+    req: Request<Body>,
+) -> Result<Response<Body>, Error> {
     let mut uri = format!("http://{}", config.proxy_address);
 
     let (parts, body) = req.into_parts();
@@ -114,8 +128,11 @@ async fn proxy(config: &Configuration, req: Request<Body>) -> Result<Response<Bo
     );
 
     let client = Client::new();
+    let result = client.request(proxy_req).await;
 
-    client.request(proxy_req).await
+    metrics.lock().unwrap().concurrent_requests.decrement();
+
+    result
 }
 
 fn determine_delay(scenario: &Scenario, metrics: &Mutex<Metrics>) -> Fault {
@@ -177,6 +194,18 @@ fn load_metrics(metrics: &Mutex<Metrics>) -> Result<Response<Body>, Error> {
     Ok::<Response<Body>, Error>(response)
 }
 
+fn load_overloaded(config: &Configuration) -> Result<Response<Body>, Error> {
+    let response = Response::builder()
+        .status(StatusCode::SERVICE_UNAVAILABLE)
+        .body(Body::from(format!(
+            "The maximum number of concurrent requests({}) has been exceeded.",
+            config.max_concurrent_requests
+        )))
+        .unwrap();
+
+    Ok::<Response<Body>, Error>(response)
+}
+
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
@@ -197,6 +226,14 @@ async fn main() {
 
     info!("Listening on http://{}", listening_addr);
     info!("Proxying to http://{}", proxying_addr);
+    info!(
+        "Metrics available at http://{}{}",
+        listening_addr, CONFIG.metrics_path
+    );
+    info!(
+        "Maximum concurrent requests: {}",
+        CONFIG.max_concurrent_requests
+    );
     info!("Started in {}ms.", now.elapsed().as_millis());
     info!("Ready to cause trouble.");
 
