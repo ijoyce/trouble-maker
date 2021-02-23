@@ -3,6 +3,10 @@ A layer 7 fault injection proxy server.
 
 ![CI](https://github.com/ijoyce/trouble-maker/workflows/CI/badge.svg)
 
+### Supported Protocols
+* HTTP/1.1
+* More in progress
+
 ### Building
 > $ cargo build --release
 
